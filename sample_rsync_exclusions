@@ -1,0 +1,11 @@
+/dev/*
+/lost+found
+/media/*
+/mnt/*
+/proc/*
+/run/*
+/sys/*
+/tmp/*
+/usr/tmp/*
+/var/cache/*
+/var/tmp/*

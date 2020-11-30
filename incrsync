@@ -1,0 +1,154 @@
+#!/bin/bash
+#title          : incrsync
+#description    : An incremental backup utility built on rsync
+#                 (https://rsync.samba.org/). This script uses a suggested
+#                 implementation found on
+#                 https://linuxconfig.org/how-to-create-incremental-backups-using-rsync-on-linux
+#                 and includes basic checks for handling command line arguments.
+#author         : Jarrod N. Bakker
+#date           : 29/11/2020
+#version        : 1.0.0
+#usage          : incrsync STORAGE_DIR BKP_ROOT EXCL_FILE
+#history        : 29-11-2020 - jnb - Initial version
+#==============================================================================
+PATH=/bin:/usr/bin:/sbin:/usr/sbin:/usr/local/bin
+export PATH
+
+display_usage() {
+    cat <<HELP_USAGE
+Usage: $0 [options] STORAGE_DIR BKP_ROOT EXCL_FILE
+
+Optional arguments:
+  -h or --help      Display this message and exit
+
+Positional arguments:
+  STORAGE_DIR       The parent directory for storing the incremental backups
+                    and logs. Note that this script creates a directory for
+                    storing logs but does not write there itself. You must use
+                    output redirection to write there (defaults to
+                    STORAGE_DIR/log). logrotate can optionally be used to manage
+                    the rotation and size of these logs.
+  BKP_ROOT          The root directory to backup.
+  EXCL_FILE         Path to a file that contains exclude patterns for rsync.
+                    This path will be passed to rsync's --exclude-from option.
+                    See 'man rsync' for information on how to use this feature.
+HELP_USAGE
+}
+
+log_fatal() {
+    echo -e "`date '+%Y-%m-%d %H:%M:%S'` FATAL $1"
+}
+
+log_info() {
+    echo -e "`date '+%Y-%m-%d %H:%M:%S'` INFO $1"
+}
+
+###
+### Argument sanity checks
+###
+
+# Thanks to https://medium.com/@Drew_Stokes/bash-argument-parsing-54f3b81a6a8f
+# for the options parser below!
+PARAMS=""
+while (( "$#" )); do
+    case "$1" in
+        -h|--help)
+            display_usage
+            exit 0
+            ;;
+        -*|--*=) # unsupported flags
+            echo "Unsupported flag supplied: $1" >&2
+            display_usage
+            exit 1
+            ;;
+        *) # preserve positional arguments
+            PARAMS="$PARAMS $1"
+            shift
+            ;;
+    esac
+done
+# set positional arguments in their proper place
+eval set -- "$PARAMS"
+
+if [[ $# -ne 3 ]]; then
+    display_usage
+    exit 1
+fi
+
+###
+### Establish constants
+###
+
+readonly STORAGE_DIR="${1}"
+readonly BACKUP_DIR="${STORAGE_DIR}/backups"
+readonly LOG_DIR="${STORAGE_DIR}/log"
+readonly BKP_ROOT="${2}"
+readonly EXCLUSIONS="${3}"
+readonly DATETIME="$(date '+%Y-%m-%d_%H:%M:%S')"
+readonly CUR_BKP_DIR="${BACKUP_DIR}/${DATETIME}"
+readonly SYMLINK_LATEST_BKP="${BACKUP_DIR}/latest"
+
+####
+#### Pre-backup sanity checks
+####
+
+if [ ! -d "${STORAGE_DIR}" ]; then
+    log_fatal "The specified parent directory for this utility \n\t\t\
+('${STORAGE_DIR}') does not appear to exist. Please create\n\t\tthis \
+directory or set the STORAGE_DIR variable to a valid\n\t\tpath for a \
+directory. It is recommended that you provide\n\t\ta path to directory that mounts a \
+storage device that\n\t\tis dedicated to storing backups.\n\t\tExiting..." 
+    exit 1
+fi
+
+if [ ! -d "${BKP_ROOT}" ]; then
+    log_fatal "The specified root directory to backup ('${BKP_ROOT}') does not \
+appear to exist. Exiting..."
+    exit 1
+fi
+
+if [ ! -f "${EXCLUSIONS}" ]; then
+    log_fatal "The specified exclusions file for rsync ('${EXCLUSIONS}') does \
+not apear to exist. Exiting..."
+    exit 1
+fi
+
+if [ ! -d "${BACKUP_DIR}" ]; then
+    log_info "Creating backup storage directory as it does not exist: \
+${BACKUP_DIR}"
+    mkdir -p "${BACKUP_DIR}"
+    chown root:root "${BACKUP_DIR}"
+    chmod 700 "${BACKUP_DIR}"
+fi
+
+if [ ! -d "${LOG_DIR}" ]; then
+    log_info "Creating log directory for this utility as it does not exist: \
+${LOG_DIR}"
+    mkdir -p "${LOG_DIR}"
+    chown root:root "${LOG_DIR}"
+    chmod 755 "${LOG_DIR}"
+fi
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+###
+### Begin the backup proper
+###
+
+log_info "The source directory for the incremental backup has been set to: \
+${BKP_ROOT}"
+log_info "The specified exclusions file for rsync ('${EXCLUSIONS}') contains \
+the following exclusions: `cat ${EXCLUSIONS} | paste -sd , | sed 's/,/, /g'`"
+
+log_info "Starting incremental backup with rsync..."  
+rsync -aAvX --delete \
+  "${BKP_ROOT}/" \
+  --link-dest "${SYMLINK_LATEST_BKP}" \
+  --exclude-from "${EXCLUSIONS}" \
+  "${CUR_BKP_DIR}"
+
+rm -rf "${SYMLINK_LATEST_BKP}"
+ln -s "${CUR_BKP_DIR}" "${SYMLINK_LATEST_BKP}"
+log_info "Backup complete! The latest backup can be found at: ${CUR_BKP_DIR}"
