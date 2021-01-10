@@ -9,7 +9,7 @@
 #date           : 29/11/2020
 #version        : 1.0.0
 #usage          : incrsync STORAGE_DIR BKP_ROOT EXCL_FILE
-#history        : 29-11-2020 - jnb - Initial version
+#history        : 10-01-2021 - jnb - Initial version complete
 #==============================================================================
 PATH=/bin:/usr/bin:/sbin:/usr/sbin:/usr/local/bin
 export PATH
