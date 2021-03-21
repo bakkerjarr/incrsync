@@ -43,6 +43,10 @@ log_info() {
     echo -e "`date '+%Y-%m-%d %H:%M:%S'` INFO $1"
 }
 
+log_warn() {
+    echo -e "`date '+%Y-%m-%d %H:%M:%S'` WARN $1"
+}
+
 ###
 ### Argument sanity checks
 ###
@@ -143,11 +147,14 @@ log_info "The specified exclusions file for rsync ('${EXCLUSIONS}') contains \
 the following exclusions: `cat ${EXCLUSIONS} | paste -sd , | sed 's/,/, /g'`"
 
 log_info "Starting incremental backup with rsync..."  
-rsync -aAvX --delete \
+if ! rsync -aAvX --delete \
   "${BKP_ROOT}/" \
   --link-dest "${SYMLINK_LATEST_BKP}" \
   --exclude-from "${EXCLUSIONS}" \
-  "${CUR_BKP_DIR}"
+  "${CUR_BKP_DIR}"; then
+    log_warn "rsync exited with a non-zero status, please read the log for \
+more information."
+fi
 
 rm -rf "${SYMLINK_LATEST_BKP}"
 ln -s "${CUR_BKP_DIR}" "${SYMLINK_LATEST_BKP}"
