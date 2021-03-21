@@ -7,16 +7,18 @@
 #                 and includes basic checks for handling command line arguments.
 #author         : Jarrod N. Bakker
 #date           : 29/11/2020
-#version        : 1.0.0
-#usage          : incrsync STORAGE_DIR BKP_ROOT EXCL_FILE
-#history        : 10-01-2021 - jnb - Initial version complete
+#version        : 1.1.0
+#usage          : incrsync STORAGE_DIR BKP_ROOT EXCL_FILE RETENTION_MONTHS
+#history        : 10-01-2021 - jnb - Initial version complete.
+#                 21-03-2021 - jnb - Added a compulsory retention mechanism for
+#                                    removing backups after a period of months.
 #==============================================================================
 PATH=/bin:/usr/bin:/sbin:/usr/sbin:/usr/local/bin
 export PATH
 
 display_usage() {
     cat <<HELP_USAGE
-Usage: $0 [options] STORAGE_DIR BKP_ROOT EXCL_FILE
+Usage: $0 [options] STORAGE_DIR BKP_ROOT EXCL_FILE RETENTION_MONTHS
 
 Optional arguments:
   -h or --help      Display this message and exit
@@ -32,6 +34,8 @@ Positional arguments:
   EXCL_FILE         Path to a file that contains exclude patterns for rsync.
                     This path will be passed to rsync's --exclude-from option.
                     See 'man rsync' for information on how to use this feature.
+  RETENTION_MONTHS  The maximum age for a backup in months before it gets
+                    deleted forever.
 HELP_USAGE
 }
 
@@ -74,7 +78,7 @@ done
 # set positional arguments in their proper place
 eval set -- "$PARAMS"
 
-if [[ $# -ne 3 ]]; then
+if [[ $# -ne 4 ]]; then
     display_usage
     exit 1
 fi
@@ -91,6 +95,7 @@ readonly EXCLUSIONS="${3}"
 readonly DATETIME="$(date '+%Y-%m-%d_%H:%M:%S')"
 readonly CUR_BKP_DIR="${BACKUP_DIR}/${DATETIME}"
 readonly SYMLINK_LATEST_BKP="${BACKUP_DIR}/latest"
+readonly RETENTION_MONTHS="${4}"
 
 ####
 #### Pre-backup sanity checks
@@ -159,3 +164,13 @@ fi
 rm -rf "${SYMLINK_LATEST_BKP}"
 ln -s "${CUR_BKP_DIR}" "${SYMLINK_LATEST_BKP}"
 log_info "Backup complete! The latest backup can be found at: ${CUR_BKP_DIR}"
+
+###
+### Remove backups older than RETENTION_MONTHS months
+###
+log_info "Removing backups older than ${RETENTION_MONTHS} months..."
+readonly RETENTION_DAYS=$(( ( $(date "+%s") - $(date -d "${RETENTION_MONTHS} months ago" "+%s") ) / 86400 ))
+find "${BACKUP_DIR}" -mindepth 1 -maxdepth 1 -mtime "+${RETENTION_DAYS}" \
+-print0 | xargs -0 rm -rf
+
+log_info "incrsync has finished the backup process. Exiting..."
