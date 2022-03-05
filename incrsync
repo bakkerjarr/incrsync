@@ -170,7 +170,7 @@ log_info "Backup complete! The latest backup can be found at: ${CUR_BKP_DIR}"
 ###
 log_info "Removing backups older than ${RETENTION_MONTHS} months..."
 readonly RETENTION_DAYS=$(( ( $(date "+%s") - $(date -d "${RETENTION_MONTHS} months ago" "+%s") ) / 86400 ))
-find "${BACKUP_DIR}" -mindepth 1 -maxdepth 1 -mtime "+${RETENTION_DAYS}" \
+find "${BACKUP_DIR}" -mindepth 1 -maxdepth 1 -atime "+${RETENTION_DAYS}" \
 -print0 | xargs -0 rm -rf
 
 log_info "incrsync has finished the backup process. Exiting..."
